@@ -1,0 +1,23 @@
+[package]
+name = "wasmtest"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rand = "0.8.5"
+flate2 = "1.0.24"
+tar = "0.4.38"
+
+[dependencies.wasmer]
+git = "https://github.com/wasmerio/wasmer"
+rev = "7d44c135f8eb7c31815438f8dfc86aa92c787b7b"
+
+[dependencies.wasmer_wasi]
+git = "https://github.com/wasmerio/wasmer"
+rev = "7d44c135f8eb7c31815438f8dfc86aa92c787b7b"
+package = "wasmer-wasi"
+
+[dependencies.wasmer_vfs]
+git = "https://github.com/wasmerio/wasmer"
+rev = "7d44c135f8eb7c31815438f8dfc86aa92c787b7b"
+package = "wasmer-vfs"
