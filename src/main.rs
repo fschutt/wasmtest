@@ -4,6 +4,7 @@ use wasmer_wasi::{WasiFunctionEnv, WasiState};
 use wasmer_vfs::mem_fs::FileSystem as MemFileSystem;
 use std::collections::BTreeMap;
 use std::path::{PathBuf, Path};
+use wasmer_wasi::WasiBidirectionalSharedPipePair;
 
 const PYTHON: &[u8] = include_bytes!("../python.tar.gz");
 const TEST_SCRIPT: &str = include_str!("./test.py");
@@ -163,11 +164,12 @@ pub(crate) fn exec_module(
         .call(store, &[])
         .map_err(|e| format!("{e}"))?;
 
-    Ok(())
+        Ok(())
 }
 
 fn prepare_webc_env(
     store: &mut Store,
+    stdout: WasiBidirectionalSharedPipePair,
     files: &FileMap,
     command: &str,
 ) -> Result<WasiFunctionEnv, String> {
@@ -226,12 +228,16 @@ fn prepare_webc_env(
         wasi_env
         .env("PYTHONHOME", "/")
         .arg("/lib/file.py")
+        .stdout(Box::new(stdout))
         .finalize(store)
         .map_err(|e| format!("E5: {e}"))?
     )
 }
 
 fn main() {
+    use std::io::Read;
+
+    let now = std::time::Instant::now();
 
     // Unpack python into memory and initialize file system
     let mut python_unpacked = unpack_tar_gz(PYTHON.to_vec(), "python/atom/").unwrap();
@@ -244,13 +250,29 @@ fn main() {
     );
 
     let mut store = Store::default();
+    let mut module = Module::from_binary(&store, &python_wasm).unwrap();
+    module.set_name("python");
+
+    let now2 = std::time::Instant::now();
+    println!("compiled python.wasm and setup filesystem in {:?}", now2 - now);
+    let now = std::time::Instant::now();
+
+    let mut stdout_pipe = WasiBidirectionalSharedPipePair::new().with_blocking(false);
+    
     let wasi_env = prepare_webc_env(
         &mut store, 
+        stdout_pipe.clone(),
         &python_unpacked, 
         "python"
     ).unwrap();
 
-    let mut module = Module::from_binary(&store, &python_wasm).unwrap();
-    module.set_name("python");
     exec_module(&mut store, &module, wasi_env).unwrap();
+
+    let mut buf = Vec::new();
+    stdout_pipe.read_to_end(&mut buf).unwrap();
+    let string = String::from_utf8_lossy(&buf);
+    println!("output of script: {}", string);
+
+    let now2 = std::time::Instant::now();
+    println!("executed script in {:?}", now2 - now);
 }
